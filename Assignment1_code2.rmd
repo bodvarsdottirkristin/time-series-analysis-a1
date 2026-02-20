@@ -1,0 +1,343 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(ggplot2)
+```
+
+```{r}
+### Read training data
+#! Perhaps you need to set the working directory!?
+#setwd("/home/pbac/g/course02417/2025/assignment1")
+D <- read.csv("DST_BIL54.csv")
+str(D)
+
+# See the help
+?strftime
+D$time <- as.POSIXct(paste0(D$time,"-01"), "%Y-%m-%d", tz="UTC")
+D$time
+class(D$time)
+
+## Year to month for each of them
+D$year <- 1900 + as.POSIXlt(D$time)$year + as.POSIXlt(D$time)$mon / 12
+
+## Make the output variable a floating point (i.e.\ decimal number)
+D$total <- as.numeric(D$total) / 1E6
+
+## Divide intro train and test set
+teststart <- as.POSIXct("2024-01-01", tz="UTC")
+Dtrain <- D[D$time < teststart, ]
+Dtest <- D[D$time >= teststart, ]
+```
+
+```{r}
+Dtrain
+```
+## 1. Plot data
+
+1.1
+```{r}
+dates <- as.Date(Dtrain$time)
+
+# Create x 
+Dtrain$x <- as.numeric(format(Dtrain$time, "%Y")) + 
+            (as.numeric(format(Dtrain$time, "%m")) - 1) / 12
+```
+
+1.2
+```{r}
+# Plot training data vs x
+
+variable_of_interest = Dtrain$total
+plot(Dtrain$x, variable_of_interest, type = "l", xlab = "Time Variable X", 
+     ylab = "Total", main = "Total vs Time Variable X")
+
+```
+
+```{r}
+# Basic statistics
+cat("Start value (2018-01):", Dtrain$total[1], "\n") 
+cat("End value (2023-12):", tail(Dtrain$total, 1), "\n")
+cat("Total growth:", tail(Dtrain$total, 1) - Dtrain$total[1], "\n")
+cat("Monthly observations:", nrow(Dtrain), "\n")
+cat("Average monthly growth:", mean(diff(Dtrain$total)), "\n")
+cat("Annual growth rate:", mean(diff(Dtrain$total)) * 12, "\n")
+
+# Linear trend fit (R² for predictability)
+fit <- lm(total ~ x, data = Dtrain)
+cat("Linear model R²:", round(summary(fit)$r.squared, 3), "\n")
+
+# Print results
+print(fit)
+```
+
+The training data plot shows a clear upward trend in total registered motor vehicles in Denmark from 2018 to approximately 2022 with slight downward hills in beginning of 2022 and also in the end of 2022 leading up to the start of 2023. 
+
+
+## 2. Linear trend model
+
+```{r}
+head(Dtrain[, c("x", "total")], 3)
+```
+
+## 3. OLS - global linear trend model
+
+# 3.1. Estimate the parameters θ1 and θ2 using the training set (call it the Ordinary Least Squares (OLS) estimates). Describe how you calculated the estimates.
+
+```{r}
+y <- Dtrain$total
+X <- cbind(1, Dtrain$x)
+
+thetahat <- solve(t(X) %*% X) %*% t(X) %*% y
+
+thetahat
+
+```
+
+# 3.2
+
+```{r}
+
+# Step 1: Residuals
+residuals <- y - X %*% thetahat
+
+# Step 2: Estimate sigma^2 (residual variance)
+n <- nrow(X)           # 72 observations
+p <- ncol(X)           # 2 parameters
+sigma2_hat <- sum(residuals^2) / (n - p)  # unbiased estimator
+
+# Step 3: Variance-covariance matrix of thetahat
+V_theta <- sigma2_hat * solve(t(X) %*% X)
+
+# Step 4: Standard errors = sqrt(diag(V_theta))
+se_theta1 <- sqrt(V_theta[1,1])  # σ̂_θ₁
+se_theta2 <- sqrt(V_theta[2,2])  # σ̂_θ₂
+
+se_theta1
+
+se_theta2
+```
+
+```{r}
+fitted_mean <- X %*% thetahat  # μ̂(x) for all training points
+
+plot(Dtrain$x, Dtrain$total, 
+     pch = 16, col = "steelblue", cex = 0.8,
+     xlab = "Time Variable x (fractional years)",
+     ylab = "Total Registered Vehicles",
+     main = "Observations and Estimated Mean")
+
+lines(Dtrain$x, fitted_mean, col = "red", lwd = 2)
+
+# Legend
+legend("topleft", 
+       legend = c("Observations y", "Estimated Mean)"), 
+       pch = c(16, NA), 
+       lty = c(NA, 1), 
+       col = c("steelblue", "red"), 
+       lwd = c(NA, 2))
+
+```
+
+# 3.3 Make a forecast for the test set, hence the following 12 months - i.e., compute predicted values
+with corresponding prediction intervals for 2024-Jan to 2024-Dec. Present these values in a table.
+
+```{r}
+# Test set: 2024-Jan to Dec
+
+# Create x 
+Dtest$x <- as.numeric(format(Dtest$time, "%Y")) + 
+            (as.numeric(format(Dtest$time, "%m")) - 1) / 12
+
+X_test <- cbind(1, Dtest$x)
+
+# Predictions + 95% prediction intervals
+yhat_test <- X_test %*% thetahat
+
+se_pred_test <- sqrt(sigma2_hat + diag(X_test %*% V_theta %*% t(X_test)))
+t_crit <- qt(0.975, df = nrow(X) - ncol(X))  # 95% critical t-value
+pred_int <- cbind(
+  lower = yhat_test - t_crit * se_pred_test,
+  upper = yhat_test + t_crit * se_pred_test
+)
+
+# Forecast table using Dtest months
+forecast_table <- data.frame(
+  Month = format(Dtest$time, "%b %Y"),
+  x = round(Dtest$x, 3),
+  Actual = round(Dtest$total, 3),
+  Forecast = round(yhat_test, 3),
+  `Lower 95%` = round(pred_int[,1], 3),
+  `Upper 95%` = round(pred_int[,2], 3)
+)
+print(forecast_table, row.names = FALSE)
+```
+
+
+# 3.4 Plot the fitted model together with the training data and the forecasted values (also plot the prediction intervals of the forecasted values).
+
+
+
+```{r}
+
+# Order test data
+ord <- order(Dtest$x)
+
+# Dataframe for plot
+Dpred <- data.frame(
+  x = Dtest$x[ord],
+  yhat = yhat_test[ord],
+  lower = pred_int[ord, 1],
+  upper = pred_int[ord, 2]
+)
+
+
+x_seq <- seq(min(c(Dtrain$x, Dtest$x)), 2025, length.out = 200)
+Dfitted <- data.frame(
+  x = x_seq,
+  y = coef(fit)[1] + coef(fit)[2] * x_seq
+)
+
+ggplot() +
+  geom_point(data = Dtrain,
+             aes(x = x, y = total, color = "Training data")) +
+  geom_point(data = Dtest,
+             aes(x = x, y = total, color = "Test data")) +
+  geom_line(data = Dfitted,
+            aes(x = x, y = y, color = "Fitted model"),
+            linewidth = 1) +
+  geom_line(data = Dpred,
+            aes(x = x, y = yhat, color = "Forecast"),
+            linewidth = 1) +
+  geom_line(data = Dpred,
+            aes(x = x, y = lower, color = "95% Prediction Interval"),
+            linetype = "dashed") +
+  geom_line(data = Dpred,
+            aes(x = x, y = upper, color = "95% Prediction Interval"),
+            linetype = "dashed") +
+  
+  coord_cartesian(
+    xlim = c(min(c(Dtrain$x, Dtest$x)), 2025),
+    ylim = c(min(c(Dtrain$total, Dtest$total)), 3.4)) +
+  
+  scale_color_manual(
+    name = "",
+    values = c("Training data" = "black",
+               "Test data" = "darkgreen",
+               "Fitted model" = "blue",
+               "Forecast" = "red",
+               "95% Prediction Interval" = "red")) +
+  
+  labs(title = "Fitted Model with Forecast and Prediction Intervals",
+       x = "Year",
+       y = "Total registered vehicles (millions)") +
+  
+  theme_minimal() +
+  theme(
+    legend.position = "inside",
+    legend.position.inside = c(0.02, 0.98),
+    legend.justification = c(0, 0.9))
+```
+
+```{r}
+
+X_train <- cbind(1, Dtrain$x)
+
+# Predictions + 95% prediction intervals for training data
+yhat_train <- X_train %*% thetahat
+
+se_pred_train <- sqrt(sigma2_hat + diag(X_train %*% V_theta %*% t(X_train)))
+t_crit_train <- qt(0.975, df = nrow(X) - ncol(X))  # 95% critical t-value
+pred_int_train <- cbind(
+  lower = yhat_train - t_crit_train * se_pred_train,
+  upper = yhat_train + t_crit_train * se_pred_train
+)
+
+```
+
+```{r}
+# Order test data
+ord_train <- order(Dtrain$x)
+
+# Dataframe for plot
+Dpred <- data.frame(
+  x = Dtrain$x[ord_train],
+  yhat = yhat_train[ord_train],
+  lower = pred_int_train[ord_train, 1],
+  upper = pred_int_train[ord_train, 2]
+)
+
+
+x_seq <- seq(min(c(Dtrain$x, Dtest$x)), 2024, length.out = 200)
+Dfitted <- data.frame(
+  x = x_seq,
+  y = coef(fit)[1] + coef(fit)[2] * x_seq
+)
+
+ggplot() +
+  geom_point(data = Dtrain,
+             aes(x = x, y = total, color = "Training data")) +
+  #geom_point(data = Dtest,
+   #          aes(x = x, y = total, color = "Test data")) +
+  geom_line(data = Dfitted,
+            aes(x = x, y = y, color = "Fitted model"),
+            linewidth = 1) +
+  #geom_line(data = Dpred,
+    #        aes(x = x, y = yhat, color = "Forecast"),
+    #        linewidth = 1) +
+  geom_line(data = Dpred,
+            aes(x = x, y = lower, color = "95% Prediction Interval"),
+            linetype = "dashed") +
+  geom_line(data = Dpred,
+            aes(x = x, y = upper, color = "95% Prediction Interval"),
+            linetype = "dashed") +
+  
+  #coord_cartesian(
+   # xlim = c(min(c(Dtrain$x, Dtest$x)), 2025),
+    #ylim = c(min(c(Dtrain$total, Dtest$total)), 3.4)) +
+  
+  scale_color_manual(
+    name = "",
+    values = c("Training data" = "black",
+               "Fitted model" = "red",
+               "95% Prediction Interval" = "red")) +
+  
+  labs(title = "Fitted Model with Forecast and Prediction Intervals",
+       x = "Year",
+       y = "Total registered vehicles (millions)") +
+  
+  theme_minimal() +
+  theme(
+    legend.position = "inside",
+    legend.position.inside = c(0.02, 0.98),
+    legend.justification = c(0, 0.9))
+```
+
+# 3.6 Investigate the residuals of the model
+
+```{r}
+residuals <- fitted_mean - Dtrain$total
+
+plot(Dtrain$x, residuals,
+     pch = 16,
+     xlab = "Year",
+     ylab = "Residuals",
+     main = "Residuals Over Time")
+abline(h = 0, col = "red", lwd = 2)
+```
+
+
+```{r}
+qqnorm(residuals)
+qqline(residuals, col = "red")
+```
+
+
+```{r}
+hist(residuals,
+     breaks = 15,
+     main = "Histogram of Residuals",
+     xlab = "Residuals")
+```
+
