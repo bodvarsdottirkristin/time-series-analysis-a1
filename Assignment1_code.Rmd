@@ -175,7 +175,7 @@ print(forecast_table, row.names = FALSE)
 prediction intervals of the forecasted values).
 
 ```{r}
-# TODO
+# TOD
 ```
 
 # 3.6 Investigate the residuals of the model
