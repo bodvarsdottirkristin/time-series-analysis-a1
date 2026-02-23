@@ -374,6 +374,201 @@ OLS_sum
 ```
 # 4.4
 ```{r}
-cov = 
+cov = diag(1/lambdas)
+
+X_train <- cbind(1, Dtrain$x)
+Y_train <- Dtrain$total 
+
+F_N = t(X_train) %*% solve(cov) %*% X_train
+h_N = t(X_train) %*% solve(cov) %*% Y_train
+
+theta_hat_wls <- solve(F_N) %*% h_N
+theta_hat_wls
+```
+# 4.5
+```{r}
+library(ggplot2)
+
+# ==========================================
+# 1. OLS Full Model (Train + Test)
+# ==========================================
+# existing OLS thetahat and V_theta from sec 3
+X_test  <- cbind(1, Dtest$x)
+X_full  <- rbind(X_train, X_test)
+
+# OLS Predictions for all data
+y_hat_ols_full <- X_full %*% thetahat
+
+# OLS standard errors and intervals for all data
+se_pred_ols_full <- sqrt(sigma2_hat + diag(X_full %*% V_theta %*% t(X_full)))
+t_crit_ols <- qt(0.975, df = nrow(X_train) - ncol(X_train))
+
+pred_int_ols_full <- cbind(
+  lower = y_hat_ols_full - t_crit_ols * se_pred_ols_full,
+  upper = y_hat_ols_full + t_crit_ols * se_pred_ols_full
+)
+
+df_ols_full <- data.frame(
+  x = c(Dtrain$x, Dtest$x),
+  yhat = y_hat_ols_full,
+  lower = pred_int_ols_full[, 1],
+  upper = pred_int_ols_full[, 2],
+  Model = "OLS (Global Trend)"
+)
+
+# ==========================================
+# 2. WLS Full Model (Train + Test)
+# ==========================================
+
+# WLS variance and standard errors
+res_wls <- Dtrain$total - (X_train %*% theta_hat_wls)
+sigma2_wls <- sum(diag(solve(cov)) * res_wls^2) / (nrow(X_train) - ncol(X_train))
+V_theta_wls <- sigma2_wls * solve(F_N)
+
+# WLS Predictions
+y_hat_wls_full <- X_full %*% theta_hat_wls
+
+# WLS standard errors and intervals
+se_pred_wls_full <- sqrt(sigma2_wls + diag(X_full %*% V_theta_wls %*% t(X_full)))
+t_crit_wls <- qt(0.975, df = nrow(X_train) - ncol(X_train))
+
+pred_int_wls_full <- cbind(
+  lower = y_hat_wls_full - t_crit_wls * se_pred_wls_full,
+  upper = y_hat_wls_full + t_crit_wls * se_pred_wls_full
+)
+
+df_wls_full <- data.frame(
+  x = c(Dtrain$x, Dtest$x),
+  yhat = y_hat_wls_full,
+  lower = pred_int_wls_full[, 1],
+  upper = pred_int_wls_full[, 2],
+  Model = "WLS (Discounted, lambda=0.9)"
+)
+
+# Combine both models for easy plotting
+df_models_full <- rbind(df_ols_full, df_wls_full)
+
+# Combine actual data for plotting
+df_actuals <- data.frame(
+  x = c(Dtrain$x, Dtest$x),
+  total = c(Dtrain$total, Dtest$total),
+  Set = c(rep("Training Data", nrow(Dtrain)), rep("Test Data", nrow(Dtest)))
+)
+
+# ==========================================
+# 3. Plotting the Full Models
+# ==========================================
+plot_4_5 <- ggplot() +
+  # Actual observations
+  geom_point(data = df_actuals, 
+             aes(x = x, y = total, shape = Set), 
+             color = "black", size = 1.5, alpha = 0.7) +
+  
+  # Lines for the fitted/forecasted models
+  geom_line(data = df_models_full, 
+            aes(x = x, y = yhat, color = Model), 
+            linewidth = 1) +
+  
+  # Ribbons for the 95% prediction intervals
+  geom_ribbon(data = df_models_full, 
+              aes(x = x, ymin = lower, ymax = upper, fill = Model), 
+              alpha = 0.15) +
+  
+  # Vertical line to show where training ends and test begins
+  geom_vline(xintercept = min(Dtest$x), linetype = "dashed", color = "darkgray", linewidth = 0.8) +
+  annotate("text", x = min(Dtest$x) + 0.05, y = mean(df_actuals$total), 
+           label = "Forecast Start", angle = 90, vjust = -0.5, color = "darkgray") +
+  
+  # Formatting and aesthetics
+  scale_shape_manual(name = "Data", values = c("Training Data" = 16, "Test Data" = 17)) +
+  scale_color_manual(name = "Model", values = c("OLS (Global Trend)" = "blue", "WLS (Discounted, lambda=0.9)" = "red")) +
+  scale_fill_manual(name = "Model", values = c("OLS (Global Trend)" = "blue", "WLS (Discounted, lambda=0.9)" = "red")) +
+  
+  labs(title = "Full Model Comparison: OLS vs. WLS (Training & Forecast)",
+       x = "Year",
+       y = "Total Registered Vehicles (Millions)") +
+  
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    legend.box = "vertical"
+  )
+
+plot_4_5
+#ggsave('4_5.png', plot =plot_4_5, height = 4, width = 8, dpi=400 )
+```
+# 4.6
+```{r}
+# ==========================================
+# 4.6: WLS for various lambdas
+# ==========================================
+lambdas_to_test <- c(0.99, 0.9, 0.8, 0.7, 0.6)
+
+
+results_list <- list()
+slopes_list <- list() # To inspect the slopes later
+
+
+for (l in lambdas_to_test) {
+  # 1. Calculate weights and Weight matrix W (inverse of covariance)
+  w <- l^((nrow(Dtrain)-1):0)
+  W <- diag(w)
+  
+  # 2. Estimate parameters (theta_hat)
+  F_N <- t(X_train) %*% W %*% X_train
+  h_N <- t(X_train) %*% W %*% Y_train
+  theta_hat <- solve(F_N) %*% h_N
+  
+  # Save the slope (theta_2) for our commentary
+  slopes_list[[as.character(l)]] <- theta_hat[2, 1]
+  
+  # 3. Forecasts for all data points
+  y_hat_full <- X_full %*% theta_hat
+  
+  # 4. Store in a temporary dataframe
+  tmp_df <- data.frame(
+    x = c(Dtrain$x, Dtest$x),
+    yhat = as.numeric(y_hat_full),
+    Lambda = as.factor(paste("lambda =", l))
+  )
+  results_list[[as.character(l)]] <- tmp_df
+}
+
+# Combine all results into one dataframe
+df_lambdas <- do.call(rbind, results_list)
+
+# Print the slopes to answer the question
+cat("Estimated Slopes (theta_2) for different lambdas:\n")
+print(unlist(slopes_list))
+
+# ==========================================
+# Plotting the different lambdas
+# ==========================================
+plot_4_6 <- ggplot() +
+  # Actual observations
+  geom_point(data = df_actuals, 
+             aes(x = x, y = total, shape = Set), 
+             color = "black", size = 1.5, alpha = 0.5) +
+  
+  # Fitted/Forecasted lines for each lambda
+  geom_line(data = df_lambdas, 
+            aes(x = x, y = yhat, color = Lambda), 
+            linewidth = 1) +
+  
+  # Vertical line separating train/test
+  geom_vline(xintercept = min(Dtest$x), linetype = "dashed", color = "darkgray", linewidth = 0.8) +
+  annotate("text", x = min(Dtest$x) + 0.05, y = mean(df_actuals$total), 
+           label = "Forecast Start", angle = 90, vjust = -0.5, color = "darkgray") +
+  
+  scale_shape_manual(name = "Data", values = c("Training Data" = 16, "Test Data" = 17)) +
+  labs(title = "WLS Forecasts for Different Forgetting Factors (Lambda)",
+       x = "Year",
+       y = "Total Registered Vehicles (Millions)") +
+  
+  theme_minimal() +
+  theme(legend.position = "right")
+
+plot_4_6
+#ggsave('4_6.png', plot = plot_4_6, height = 4, width = 8, dpi=400)
 ```
 
