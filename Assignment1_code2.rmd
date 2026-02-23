@@ -157,6 +157,7 @@ yhat_test <- X_test %*% thetahat
 
 se_pred_test <- sqrt(sigma2_hat + diag(X_test %*% V_theta %*% t(X_test)))
 t_crit <- qt(0.975, df = nrow(X) - ncol(X))  # 95% critical t-value
+
 pred_int <- cbind(
   lower = yhat_test - t_crit * se_pred_test,
   upper = yhat_test + t_crit * se_pred_test
@@ -339,5 +340,40 @@ hist(residuals,
      breaks = 15,
      main = "Histogram of Residuals",
      xlab = "Residuals")
+```
+
+# 3.1 
+```{r}
+lambda <- 0.9
+lambdas <- lambda^((nrow(Dtrain)-1):0)
+
+plot_data <- data.frame(
+  Time = Dtrain$year,
+  Weight = lambdas
+)
+
+
+p <- ggplot(plot_data, aes(x = Time, y = Weight)) +
+  geom_point() +                      
+  labs(x = "Time", y = "Weight") +    
+  theme_minimal()                     
+
+
+print(p)
+
+# 4. Save the plot
+#ggsave("4_2.png", plot = p, width = 8, height = 6, dpi = 600)
+```
+# 4.3
+```{r}
+lambda_sum = sum(lambdas)
+lambda_sum
+
+OLS_sum = nrow(Dtrain)
+OLS_sum
+```
+# 4.4
+```{r}
+cov = 
 ```
 
