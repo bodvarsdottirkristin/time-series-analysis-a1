@@ -572,3 +572,70 @@ plot_4_6
 #ggsave('4_6.png', plot = plot_4_6, height = 4, width = 8, dpi=400)
 ```
 
+
+# 5.1
+
+```{r}
+
+y
+
+X
+#cat("y1 =", y[1], "\n")  # Jan 2018
+# cat("y2 =", y[2], "\n")  # Feb 2018
+# cat("x1 =", X[1,], "\n")      # ~2018.0  
+# cat("x2 =", X[2,], "\n")      # ~2018.083
+
+```
+
+# 5.2
+
+```{r}
+# RLS
+# Set the initial value of R and theta
+p <- ncol(X) 
+N <- nrow(X) # datapoints
+R <- diag(0.1, nrow=p)
+```
+
+```{r}
+theta <- c(0,0)#rep(0, p)
+Theta <- matrix(NA, nrow=N, ncol=p)
+
+# Iterate through and estimate the parameters
+for(i in 1:N){
+  (x <- X[i, ])
+  # Update
+  (R <- R + x %*% t(x))
+  (theta <- theta + solve(R) %*% x %*% (y[i] - t(x) %*% theta))
+  Theta[i, ] <- theta
+}
+
+Theta
+
+Theta[1,] 
+Theta[2,]
+Theta[3,]
+
+```
+
+# 5.3. Calculate the RLS estimates at time t= N (i.e.
+θN) and compare them to the OLS estimates,
+are they close? Can you find a way to decrease the difference by modifying some of the RLS
+initial values and explain why initial values are important to get right?
+
+# From what I understand we should retrieve the last value of the Thetas
+```{r}
+theta <- c(0,0)#rep(0, p)
+Theta <- matrix(NA, nrow=N, ncol=p)
+
+# Iterate through and estimate the parameters
+for(i in 1:N){
+  (x <- X[i, ])
+  # Update
+  (R <- R + x %*% t(x))
+  (theta <- theta + solve(R) %*% x %*% (y[i] - t(x) %*% theta))
+  Theta[i, ] <- theta
+}
+
+Theta
+```
