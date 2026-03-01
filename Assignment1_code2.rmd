@@ -639,3 +639,446 @@ for(i in 1:N){
 
 Theta
 ```
+
+
+
+
+# 5.4 - Implement RLS with forgetting
+
+
+```{r}
+# Now iterate through data:
+# For each step:
+# - calculate R and theta
+# - calculate one-step prediction
+
+lambda <- 0.7
+
+# we will use the entire dataset (not only the training data from before):
+X <- cbind(1, Dtrain$x)
+y <- cbind(Dtrain$total)
+
+n <- length(X[,1])
+
+# initialise containers for parameter estimates (Theta) and one step predictions:
+Theta_07 <- matrix(NA, nrow=n, ncol=2)
+OneStepPred_07 <- matrix(NA, nrow=n)
+
+
+# 1 # very first step:
+x1 <- X[1,]
+
+R_1 <- diag(0.1,2) # Same initialization as before 
+h_1 <- x1*y[1]    # h is a px1 vector (but R prints it in a row..)
+
+# to estimate theta we need to invert R:
+#solve(R_1)
+# in this very first step R cannot be inverted - too soon to estimate parameters!
+# (we cannot estimate p parameters drom only one datapoint)
+
+
+# 2 # second step - first time to estimate parameters and make prediction
+x2 <- X[2,]
+R_2 <- lambda*R_1 + x2 %*% t(x2)
+h_2 <- lambda*h_1 + x2 * y[2]
+
+# we estimate theta (for the first time - so not yet using "update" formula):
+Theta_07[2,] <- solve(R_2) %*% h_2
+
+# we predict one step ahead:
+OneStepPred_07[2+1] <- X[2+1,]%*%Theta_07[2,]
+
+
+# 3 # third step - first time to use update formula
+x3 <- X[3,]
+R_3 <- lambda*R_2 + x3 %*% t(x3)
+Theta_07[3,] <- Theta_07[2,] + solve(R_3) %*% x3 %*% (y[3] - t(x3) %*% Theta_07[2,])
+
+# we predict one step ahead:
+OneStepPred_07[3+1] <- X[3+1,]%*%Theta_07[3,]
+
+
+# next many steps # - update and predict
+
+R <- R_3
+
+for(i in 4:n){
+  x <- X[i, ]
+  # Update
+  R <- lambda*R + x %*% t(x)
+  Theta_07[i, ] <- Theta_07[i-1, ] + solve(R) %*% x %*% (y[i] - t(x) %*% Theta_07[i-1, ])
+}
+
+# predict
+for(i in 4:n-1){
+  OneStepPred_07[i+1] <- X[i+1, ]%*%Theta_07[i, ]
+}
+```
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+```{r}
+# Again for lambda = 0.99
+
+lambda <- 0.99
+
+# we will use the entire dataset (not only the training data from before):
+X <- cbind(1, Dtrain$x)
+y <- cbind(Dtrain$total)
+
+n <- length(X[,1])
+
+# initialise containers for parameter estimates (Theta) and one step predictions:
+Theta_099 <- matrix(NA, nrow=n, ncol=2)
+OneStepPred_099 <- matrix(NA, nrow=n)
+
+x1 <- X[1,]
+
+R_1 <- diag(0.1,2) # Initialize 
+h_1 <- x1*y[1]    # h is a px1 vector (but R prints it in a row..)
+
+# to estimate theta we need to invert R:
+#solve(R_1)
+# in this very first step R cannot be inverted - too soon to estimate parameters!
+# (we cannot estimate p parameters drom only one datapoint)
+
+# 2 # second step - first time to estimate parameters and make prediction
+x2 <- X[2,]
+R_2 <- lambda*R_1 + x2 %*% t(x2)
+h_2 <- lambda*h_1 + x2 * y[2]
+
+# we estimate theta (for the first time - so not yet using "update" formula):
+Theta_099[2,] <- solve(R_2) %*% h_2
+
+# we predict one step ahead:
+OneStepPred_099[2+1] <- X[2+1,]%*%Theta_099[2,]
+
+
+# 3 # third step - first time to use update formula
+x3 <- X[3,]
+R_3 <- lambda*R_2 + x3 %*% t(x3)
+Theta_099[3,] <- Theta_099[2,] + solve(R_3) %*% x3 %*% (y[3] - t(x3) %*% Theta_099[2,])
+
+# we predict one step ahead:
+OneStepPred_099[3+1] <- X[3+1,]%*%Theta_099[3,]
+
+
+# next many steps # - update and predict
+
+R <- R_3
+
+for(i in 4:n){
+  x <- X[i, ]
+  # Update
+  R <- lambda*R + x %*% t(x)
+  Theta_099[i, ] <- Theta_099[i-1, ] + solve(R) %*% x %*% (y[i] - t(x) %*% Theta_099[i-1, ])
+}
+
+# predict
+for(i in 4:n-1){
+  OneStepPred_099[i+1] <- X[i+1, ]%*%Theta_099[i, ]
+}
+```
+
+
+
+
+```{r}
+plot(Theta_07[,1], xlab = "Index", ylab = "Theta_1 value")
+points(Theta_099[,1], col=2)
+legend("topleft", legend=c("lambda=0.7","lambda=0.99"),
+       col=c(1,2), lty=1)
+```
+
+
+```{r}
+plot(Theta_07[,2], xlab = "Index", ylab = "Theta_2 value")
+points(Theta_099[,2], col=2)
+legend("topleft", legend=c("lambda=0.7","lambda=0.99"),
+       col=c(1,2), lty=1)
+```
+
+
+
+
+
+# 5.5 - Residuals
+
+
+```{r}
+Theta_07[1,] =c(0,0)
+Theta_099[1,] =c(0,0)
+```
+
+```{r}
+# Plot one step predictions:
+ggplot(Dtrain, aes(x=x, y=total)) +
+  geom_point(col="black") +
+  geom_point(aes(y=OneStepPred_07), colour="blue", size=1) + 
+  geom_line(aes(y=OneStepPred_07), colour="blue") +
+  coord_cartesian(ylim = c(2.9, 3.4), xlim = c(2018,2024)) +
+  scale_colour_manual(
+    name = "Series",
+    values = c("Observed" = "black",
+               "One-step prediction" = "blue")
+  )
+
+```
+
+
+
+```{r}
+residplot_07 <- OneStepPred_07[-(1:5)]
+residplot_099 <- OneStepPred_099[-(1:5)]
+residplot_y <- y[-(1:5)]
+```
+
+```{r}
+one_step_resid_07 <- residplot_07 - residplot_y
+one_step_resid_099 <- residplot_099 -residplot_y
+```
+
+
+
+```{r}
+plot(one_step_resid_07, xlab = "Index", ylab = "Residuals", ylim = c(-0.12,0.2))
+points(one_step_resid_099, col="red")
+legend("topright", legend = c("lambda=0.7", "lambda=0.99"), col = c(1,2), lty=1)
+```
+
+
+
+
+
+
+
+# 5.6 - k-step RMSE
+
+
+
+```{r}
+# Just the RLS code from earlier but I made it a function
+RLS_forgetting <- function(y,X,lambda){
+n <- nrow(X)
+p <- ncol(X)
+
+# initialise containers for parameter estimates (Theta) and one step predictions:
+Theta <- matrix(NA, nrow=n, ncol=p)
+OneStepPred <- matrix(NA, nrow=n)
+
+
+# 1 # very first step:
+x1 <- X[1,]
+
+R_1 <- diag(0.1,2) # Initialization
+h_1 <- x1*y[1]    # h is a px1 vector (but R prints it in a row..)
+
+
+
+
+# 2 # second step - first time to estimate parameters and make prediction
+x2 <- X[2,]
+R_2 <- lambda*R_1 + x2 %*% t(x2)
+h_2 <- lambda*h_1 + x2 * y[2]
+
+
+# R is now invertible (we can estimate p parameters from p observations)
+
+# we estimate theta (for the first time - so not yet using "update" formula):
+Theta[2,] <- solve(R_2) %*% h_2
+
+# we predict one step ahead:
+OneStepPred[2+1] <- X[2+1,]%*%Theta[2,]
+
+# 3 # third step - first time to use update formula
+x3 <- X[3,]
+R_3 <- lambda*R_2 + x3 %*% t(x3)
+Theta[3,] <- Theta[2,] + solve(R_3) %*% x3 %*% (y[3] - t(x3) %*% Theta[2,])
+
+# we predict one step ahead:
+OneStepPred[3+1] <- X[3+1,]%*%Theta[3,]
+
+# next many steps # - update and predict
+
+R <- R_3
+
+for(i in 4:n){
+  x <- X[i, ]
+  # Update
+  R <- lambda*R + x %*% t(x)
+  Theta[i, ] <- Theta[i-1, ] + solve(R) %*% x %*% (y[i] - t(x) %*% Theta[i-1, ])
+}
+
+# predict
+for(i in 4:n-1){
+  OneStepPred[i+1] <- X[i+1, ]%*%Theta[i, ]
+}
+
+return(list(OneStepPred = OneStepPred,
+            Theta = Theta))
+
+}
+```
+
+
+
+```{r}
+# Setup parameters
+k_seq <- 1:12                              
+lambda_seq <- seq(0.5, 0.99, by = 0.01)   
+
+# Create a matrix to store results (Rows = lambda, Columns = k)
+rmse_matrix <- matrix(NA, nrow = length(lambda_seq), ncol = length(k_seq))
+n <- nrow(X)
+
+# Loop through each lambda value
+for (j in seq_along(lambda_seq)) {
+  lam <- lambda_seq[j]
+  
+  # Fit the RLS model ONCE per lambda
+  rls_model <- RLS_forgetting(y, X, lam)
+  Theta_est <- rls_model$Theta
+  
+  # Loop through each k value for the current lambda
+  for (k_idx in seq_along(k_seq)) {
+    k <- k_seq[k_idx]
+    
+    k_step_preds <- rep(NA, n)
+    
+    # Calculate k-step predictions
+    for (i in (k + 1):n) {
+      if (!any(is.na(Theta_est[i - k, ]))) {
+        k_step_preds[i] <- sum(X[i, ] * Theta_est[i - k, ]) 
+      }
+    }
+    
+    # Calculate residuals and store the RMSE in the matrix
+    k_step_residuals <- y - k_step_preds
+    rmse_matrix[j, k_idx] <- sqrt(mean(k_step_residuals^2, na.rm = TRUE))
+  }
+}
+
+# Plot the results for multiple columns
+colors <- rainbow(length(k_seq))
+
+matplot(lambda_seq, rmse_matrix, 
+        type = "l", lty = 1, lwd = 2, col = colors,
+        xlab = expression(lambda), 
+        ylab = "RMSE",
+        main = "RMSE vs. Lambda across Forecast Horizons (k=1 to 12)")
+
+legend("topright", 
+       legend = paste("k =", k_seq), 
+       col = colors, 
+       lty = 1, 
+       lwd = 2, 
+       cex = 0.8,
+       title = "Forecast Horizon")
+```
+
+
+
+
+# 5.7 - RLS Predictions
+
+
+
+```{r}
+y_test <- Dtest$total
+```
+
+
+```{r}
+# I will choose lambda as 0.7
+lambda_fixed <- 0.7
+
+# Run on training set
+train_results <- RLS_forgetting(y, X, lambda_fixed)
+
+# Extract the very last Theta from training to use as the starting point for test
+last_theta_train <- train_results$Theta[nrow(X), ]
+
+# We also need the final R matrix from training. 
+# Since the function doesn't return it, we quickly re-calculate it:
+p <- ncol(X)
+R <- diag(0.1, p) 
+for(i in 1:nrow(X)) {
+  x <- X[i, ]
+  R <- lambda_fixed * R + x %*% t(x)
+}
+```
+
+
+
+
+```{r}
+n_test <- nrow(X_test)
+test_preds <- numeric(n_test)
+current_theta <- last_theta_train
+
+for (i in 1:n_test) {
+  x_test <- X_test[i, ]
+  
+  # 1. Predict the current test value using the existing theta
+  test_preds[i] <- sum(x_test * current_theta)
+  
+  # 2. Update R and Theta using the actual y_test[i] (Online Learning)
+  R <- lambda_fixed * R + x_test %*% t(x_test)
+  current_theta <- current_theta + solve(R) %*% x_test %*% (y_test[i] - sum(x_test * current_theta))
+}
+```
+
+
+
+
+
+```{r}
+# Create the test data frame
+# (Ensure x_test_values are the time points corresponding to your test set)
+Dtest_plot <- data.frame(
+  x = Dtest$x, 
+  total = y_test,
+  OneStepPred_07 = test_preds
+)
+
+Dtrain_plot <- data.frame(
+  x = Dtrain$x, 
+  total = y,
+  OneStepPred_07 = OneStepPred_07
+)
+
+# Combine them into one "Full" dataset
+Dfull <- rbind(Dtrain_plot[, c("x", "total", "OneStepPred_07")], Dtest_plot)
+
+# Identify where the split happens for the vertical line
+split_time <- max(Dtrain_plot$x)
+```
+
+
+```{r}
+
+ggplot(Dfull, aes(x = x)) +
+  # Actual Observed Data
+  geom_point(aes(y = total, colour = "Observed"), alpha = 0.5) +
+  
+  # RLS Predictions (Train + Test)
+  geom_line(aes(y = OneStepPred_07, colour = "One-step prediction"), size = 1) +
+  geom_point(aes(y = OneStepPred_07, colour = "One-step prediction"), size = 1) +
+  
+  # Vertical line to show where Test set begins
+  geom_vline(xintercept = split_time, linetype = "dashed", color = "red", size = 1) +
+  annotate("text", x = split_time, y = 3.35, label = "Test Start", color = "red", angle = 90, vjust = -0.5) +
+  
+  # Styling and Limits
+  coord_cartesian(ylim = c(2.9, 3.4), xlim = c(2019, max(Dfull$x))) +
+  scale_colour_manual(
+    name = " ",
+    values = c("Observed" = "black", "One-step prediction" = "blue")
+  ) +
+  theme_minimal() +
+  labs(title = "RLS Predictions",
+       subtitle = "Lambda = 0.7",
+       x = "Year", y = "Total Registered Vehicles")
+```
+
